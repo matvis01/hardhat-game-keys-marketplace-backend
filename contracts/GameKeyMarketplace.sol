@@ -6,33 +6,37 @@ error PriceMustBeAboveZero();
 error NoListingFound();
 error TransferFailed();
 error PercetageCantBeAbove100();
+error OnlyOwnerCanCancelListing();
 
 contract GameKeyMarketplace {
 
     struct Game{
         uint256 id;
-        string key;
         string name;
         string image;
+        uint256 rating;
         string[] tags;
         string[] genres;
     }
-    struct Listing {
-        Game game;
+    struct Listings {
+        uint256 gameId;
+        string[] keys;
         uint256 price;
-        address seller;
+        address owner;
+    }
+    struct BoughtGame{
+        uint256 gameId;
+        string key;
     }
 
-    event ItemListed(uint256 indexed gameId, uint256 indexed price,string gameName, string gameImage, string[] tags, string[] genres, address indexed seller);
-    event ItemBought(uint256 indexed gameId, uint256 indexed price,string gameName, string gameImage, address indexed buyer);
-    event ItemCancelled(uint256 indexed gameId, uint256 indexed price, address indexed seller);
+    event ItemListed(uint256 indexed gameId, uint256 indexed price,string gameName, string gameImage, string[] tags, string[] genres,uint256 rating, address indexed seller);
+    event ItemBought(uint256 indexed gameId, uint256 indexed price, address indexed buyer);
+    event ItemCancelled(string indexed gameId);
 
-    // gameId => seller => price => Listing[]
-    mapping(uint256 => mapping(address => mapping(uint256 => Listing[]))) private listings;
-
-    mapping(address => Game[]) private gamesBought;
-
+    mapping(string => Listings) private listings;
+    mapping(address => BoughtGame[]) private gamesBought;
     mapping(address => uint256) private balances;
+
     address private owner;
     uint256 private sellersPercentage;
 
@@ -42,70 +46,53 @@ contract GameKeyMarketplace {
         sellersPercentage = 99;
     }
 
-    function listGameKey(Game memory game,  uint256 price) external {
-        if (price <=0 ) {
-            revert PriceMustBeAboveZero();
-        }
-        listings[game.id][msg.sender][price].push(Listing(game, price, msg.sender));
-        emit ItemListed(game.id , price,game.name,game.image,game.tags, game.genres, msg.sender);
+    function listGameKey(Game memory game, string memory listingId, string memory key, uint256 price) external {
+          require(price > 0, "Price must be above zero");
+          
+        string[] memory currentKeys = listings[listingId].keys;
+        listings[listingId] = Listings(game.id,currentKeys, price, msg.sender);
+        listings[listingId].keys.push(key);
+
+        emit ItemListed(game.id,price,game.name,game.image,game.tags, game.genres,game.rating, msg.sender);
     }
 
-
-    function buyGameKey(uint256 gameId, address seller, uint256 price) external payable returns(string memory) {
-        Listing[] memory listing = listings[gameId][seller][price];
-        if(listing.length == 0) {
+    function buyGameKey(string memory listingId, uint256 gameId, address seller, uint256 price) external payable{
+        Listings memory listing = listings[listingId];
+        if(listing.keys.length == 0) {
             revert NoListingFound();
         }
         if (price > msg.value) {
             revert InsufficientFunds(msg.value, price);
         }
-
-        Game memory game = listing[listing.length -1].game;
-        gamesBought[msg.sender].push(game);
-
-        if(listing.length == 1) {
-            delete listings[gameId][seller][price];
+        string memory key = listing.keys[listing.keys.length - 1];
+        if(listing.keys.length == 1) {
+            delete listings[listingId];
         }else{
-            listings[gameId][seller][price].pop();
+            listings[listingId].keys.pop();
         }
         uint256 sellersPay = price * sellersPercentage / 100;
         balances[seller] += sellersPay;
         balances[owner] += msg.value - sellersPay;
-
-        emit ItemBought(gameId, price, game.name,game.image, msg.sender);
-
-        return game.key;
+        
+        gamesBought[msg.sender].push(BoughtGame(gameId,key));
+     
+        emit ItemBought(gameId,price, msg.sender);
     }
 
-    function cancelListing(uint256 gameId, uint256 price) external {
-        Listing[] memory listing = listings[gameId][msg.sender][price];
-        if(listing.length == 0) {
+    function cancelListing(string memory listingId) external {
+        Listings memory listing = listings[listingId];
+        if(listing.owner != msg.sender) {
+            revert OnlyOwnerCanCancelListing();
+        }
+        if(listing.keys.length == 0) {
             revert NoListingFound();
         }
-        else if(listing.length == 1) {
-            delete listings[gameId][msg.sender][price];
+        else if(listing.keys.length == 1) {
+            delete listings[listingId];
         }else{
-            delete listings[gameId][msg.sender][price][listing.length - 1];
+            listings[listingId].keys.pop();
         }
-        emit ItemCancelled(gameId, price, msg.sender);
-    }
-
-    function updateListing(uint256 gameId, uint256 price, uint256 newPrice) external {
-        Listing[] memory listing = listings[gameId][msg.sender][price];
-        if(listing.length == 0) {
-            revert NoListingFound();
-        }
-        Listing memory newListing = Listing(listing[listing.length - 1].game, newPrice, msg.sender);
-        listings[gameId][msg.sender][newPrice].push(newListing);
-
-        if(listing.length == 1) {
-            delete listings[gameId][msg.sender][price];
-        }else{
-            listings[gameId][msg.sender][price].pop();
-        }
-
-        emit ItemCancelled(gameId, price, msg.sender);
-        emit ItemListed(gameId, newPrice, newListing.game.name, newListing.game.image, newListing.game.tags, newListing.game.genres, msg.sender);
+        emit ItemCancelled(listingId);
     }
 
     function withdraw() external {
@@ -127,7 +114,7 @@ contract GameKeyMarketplace {
         sellersPercentage = newPercentage;
     }
 
-    function getGamesBought() external view returns(Game[] memory) {
+    function getGamesBought() external view returns(BoughtGame[] memory) {
         return gamesBought[msg.sender];
     }
 
