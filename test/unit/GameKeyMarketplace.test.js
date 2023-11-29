@@ -7,8 +7,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
   : describe("GameKeyMarketplace Unit Tests", function () {
       let gameKeyMarketplace, gameKeyMarketplaceContract
       const GAME_KEY = "GameKey1"
-      const GAME_ID = 1
       const PRICE = ethers.parseEther("0.1")
+      const LISTING_ID = "listingId"
+
+      const GAME = [1, "name", "image", 123, ["tag"], ["genre"]]
 
       beforeEach(async () => {
         accounts = await ethers.getSigners()
@@ -21,11 +23,12 @@ const { developmentChains } = require("../../helper-hardhat-config")
       })
 
       it("lists a game key and can be bought", async function () {
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
         const userConnectedToGameKeyMarketplace =
           gameKeyMarketplace.connect(user)
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
+          LISTING_ID,
+          GAME[0],
           deployer.address,
           PRICE,
           {
@@ -37,14 +40,18 @@ const { developmentChains } = require("../../helper-hardhat-config")
       })
       it("lists multiple game keys with different prices", async function () {
         // List two game keys with different GAME_IDs and prices
+        let GAME2 = [2, "name", "image", 123, ["tag"], ["genre"]]
+        let GAME3 = [3, "name", "image", 123, ["tag"], ["genre"]]
         await gameKeyMarketplace.listGameKey(
+          GAME2,
+          "listingId2",
           "GameKey2",
-          2,
           ethers.parseEther("0.2"),
         )
         await gameKeyMarketplace.listGameKey(
+          GAME3,
+          "listingId3",
           "GameKey3",
-          3,
           ethers.parseEther("0.3"),
         )
 
@@ -54,7 +61,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         // Buy one of the listed game keys
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          2,
+          "listingId2",
+          GAME2[0],
           deployer.address,
           ethers.parseEther("0.2"),
           {
@@ -72,30 +80,13 @@ const { developmentChains } = require("../../helper-hardhat-config")
         )
       })
 
-      it("updates the price of a listed game key", async function () {
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
-        const newPrice = ethers.parseEther("0.2")
-        await gameKeyMarketplace.updateListing(GAME_ID, PRICE, newPrice)
-        const userConnectedToGameKeyMarketplace =
-          gameKeyMarketplace.connect(user)
-        await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
-          deployer.address,
-          newPrice,
-          {
-            value: newPrice,
-          },
-        )
-        const deployerBalance = await gameKeyMarketplace.getBalance()
-        assert.equal(deployerBalance.toString(), newPrice.toString())
-      })
-
       it("withdraws balance from the contract", async function () {
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
         const userConnectedToGameKeyMarketplace =
           gameKeyMarketplace.connect(user)
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
+          LISTING_ID,
+          GAME[0],
           deployer.address,
           PRICE,
           {
@@ -112,8 +103,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
       })
 
       it("can remove a listed game", async function () {
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
-        await gameKeyMarketplace.cancelListing(GAME_ID, PRICE)
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
+        await gameKeyMarketplace.cancelListing(LISTING_ID)
 
         const userConnectedToGameKeyMarketplace =
           gameKeyMarketplace.connect(user)
@@ -121,7 +112,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
         try {
           // Try to buy a non-existent game key listing
           await userConnectedToGameKeyMarketplace.buyGameKey(
-            GAME_ID,
+            LISTING_ID,
+            GAME[0],
             deployer.address,
             PRICE,
             {
@@ -141,21 +133,26 @@ const { developmentChains } = require("../../helper-hardhat-config")
         const userConnectedToGameKeyMarketplace =
           gameKeyMarketplace.connect(user)
 
+        const GAME7 = [7, "name", "image", 123, ["tag"], ["genre"]]
+        const GAME8 = [8, "name", "image", 123, ["tag"], ["genre"]]
         // List a few game keys for the user
         await gameKeyMarketplace.listGameKey(
+          GAME7,
+          "listingId7",
           "GameKey7",
-          7,
           ethers.parseEther("0.2"),
         )
         await gameKeyMarketplace.listGameKey(
+          GAME8,
+          "listingId8",
           "GameKey8",
-          8,
           ethers.parseEther("0.3"),
         )
 
         // Buy the listed game keys
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          7,
+          "listingId7",
+          GAME7[0],
           deployer.address,
           ethers.parseEther("0.2"),
           {
@@ -163,7 +160,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
           },
         )
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          8,
+          "listingId8",
+          GAME8[0],
           deployer.address,
           ethers.parseEther("0.3"),
           {
@@ -180,20 +178,21 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         // Assert that the first game in the array has the expected gameId and gameKey
         assert.equal(userGamesBought[0].gameId, 7)
-        assert.equal(userGamesBought[0].gameKey, "GameKey7")
+        assert.equal(userGamesBought[0].key, "GameKey7")
 
         // Assert that the second game in the array has the expected gameId and gameKey
         assert.equal(userGamesBought[1].gameId, 8)
-        assert.equal(userGamesBought[1].gameKey, "GameKey8")
+        assert.equal(userGamesBought[1].key, "GameKey8")
       })
 
       it("games get removed from listing when there is multiple of the same one", async function () {
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
-        await gameKeyMarketplace.listGameKey("GAME_KEY2", GAME_ID, PRICE)
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, "key2", PRICE)
         const userConnectedToGameKeyMarketplace =
           gameKeyMarketplace.connect(user)
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
+          LISTING_ID,
+          GAME[0],
           deployer.address,
           PRICE,
           {
@@ -202,7 +201,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
         )
 
         await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
+          LISTING_ID,
+          GAME[0],
           deployer.address,
           PRICE,
           {
@@ -211,7 +211,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
         )
         try {
           await userConnectedToGameKeyMarketplace.buyGameKey(
-            GAME_ID,
+            LISTING_ID,
+            GAME[0],
             deployer.address,
             PRICE,
             {
@@ -223,45 +224,6 @@ const { developmentChains } = require("../../helper-hardhat-config")
           assert.fail("Transaction should have reverted")
         } catch (error) {
           // Check if the error message matches the expected custom error
-          assert.include(error.message, "NoListingFound")
-        }
-      })
-      it("updates one game key listing with a new price for multiple the same games and costs", async function () {
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
-        await gameKeyMarketplace.listGameKey(GAME_KEY, GAME_ID, PRICE)
-        const newPrice = ethers.parseEther("0.2")
-        await gameKeyMarketplace.updateListing(GAME_ID, PRICE, newPrice)
-
-        const userConnectedToGameKeyMarketplace =
-          gameKeyMarketplace.connect(user)
-        await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
-          deployer.address,
-          PRICE,
-          {
-            value: PRICE,
-          },
-        )
-
-        await userConnectedToGameKeyMarketplace.buyGameKey(
-          GAME_ID,
-          deployer.address,
-          newPrice,
-          {
-            value: newPrice,
-          },
-        )
-        try {
-          // Try to buy a non-existent game key listing
-          await userConnectedToGameKeyMarketplace.buyGameKey(
-            GAME_ID,
-            deployer.address,
-            PRICE,
-            {
-              value: PRICE,
-            },
-          )
-        } catch (error) {
           assert.include(error.message, "NoListingFound")
         }
       })
