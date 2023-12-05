@@ -1,0 +1,35 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/GameKeyMarketplace.sol": {
+      "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.18;\r\n\r\nerror InsufficientFunds(uint256 available, uint256 required);\r\nerror PriceMustBeAboveZero();\r\nerror NoListingFound();\r\nerror TransferFailed();\r\nerror PercetageCantBeAbove100();\r\nerror OnlyOwnerCanCancelListing();\r\n\r\ncontract GameKeyMarketplace {\r\n\r\n    struct Game{\r\n        uint256 id;\r\n        string name;\r\n        string image;\r\n        uint256 rating;\r\n        string[] tags;\r\n        string[] genres;\r\n    }\r\n    struct Listings {\r\n        uint256 gameId;\r\n        string[] keys;\r\n        uint256 price;\r\n        address owner;\r\n    }\r\n    struct BoughtGame{\r\n        uint256 gameId;\r\n        string key;\r\n    }\r\n\r\n    event ItemListed(uint256 indexed gameId, uint256 indexed price,string gameName, string gameImage, string[] tags, string[] genres,uint256 rating, address indexed seller);\r\n    event ItemBought(uint256 indexed gameId, uint256 indexed price, address indexed buyer);\r\n    event ItemCancelled(string indexed gameId);\r\n    event SellersPercentageChanged(uint256 newPercentage);\r\n\r\n    mapping(string => Listings) private listings;\r\n    mapping(address => BoughtGame[]) private gamesBought;\r\n    mapping(address => uint256) private balances;\r\n\r\n    address private immutable owner;\r\n    uint256 private sellersPercentage;\r\n\r\n    constructor() {\r\n        balances[msg.sender] = 0;\r\n        owner = msg.sender;\r\n        sellersPercentage = 99;\r\n    }\r\n\r\n\r\n    function listGameKey(Game memory game, string memory listingId, string memory key, uint256 price) external {\r\n          require(price > 0, \"Price must be above zero\");\r\n          \r\n        string[] memory currentKeys = listings[listingId].keys;\r\n        listings[listingId] = Listings(game.id,currentKeys, price, msg.sender);\r\n        listings[listingId].keys.push(key);\r\n\r\n        emit ItemListed(game.id,price,game.name,game.image,game.tags, game.genres,game.rating, msg.sender);\r\n    }\r\n\r\n    function buyGameKey(string memory listingId, uint256 gameId, address seller, uint256 price) external payable{\r\n        Listings memory listing = listings[listingId];\r\n        if(listing.keys.length == 0) {\r\n            revert NoListingFound();\r\n        }\r\n        if (price > msg.value) {\r\n            revert InsufficientFunds(msg.value, price);\r\n        }\r\n        string memory key = listing.keys[listing.keys.length - 1];\r\n        if(listing.keys.length == 1) {\r\n            delete listings[listingId];\r\n        }else{\r\n            listings[listingId].keys.pop();\r\n        }\r\n        uint256 sellersPay = price * sellersPercentage / 100;\r\n        balances[seller] += sellersPay;\r\n        balances[owner] += msg.value - sellersPay;\r\n        \r\n        gamesBought[msg.sender].push(BoughtGame(gameId,key));\r\n     \r\n        emit ItemBought(gameId,price, msg.sender);\r\n    }\r\n\r\n    function cancelListing(string memory listingId) external {\r\n        Listings memory listing = listings[listingId];\r\n        if(listing.owner != msg.sender) {\r\n            revert OnlyOwnerCanCancelListing();\r\n        }\r\n        if(listing.keys.length == 0) {\r\n            revert NoListingFound();\r\n        }\r\n        else if(listing.keys.length == 1) {\r\n            delete listings[listingId];\r\n        }else{\r\n            listings[listingId].keys.pop();\r\n        }\r\n        emit ItemCancelled(listingId);\r\n    }\r\n\r\n    function withdraw() external {\r\n        uint256 balance = balances[msg.sender];\r\n        balances[msg.sender] = 0;\r\n        if(!payable(msg.sender).send(balance)) {\r\n            revert TransferFailed();\r\n        }\r\n    }\r\n\r\n    function changeSellersPercentage(uint256 newPercentage) external {\r\n        if(msg.sender != owner) {\r\n            revert(\"Only owner can change the percentage\");\r\n        }\r\n        if (newPercentage > 100) {\r\n            revert PercetageCantBeAbove100();\r\n        }\r\n        sellersPercentage = newPercentage;\r\n        emit SellersPercentageChanged(newPercentage);\r\n    }\r\n\r\n    function getGamesBought() external view returns(BoughtGame[] memory) {\r\n        return gamesBought[msg.sender];\r\n    }\r\n\r\n    function getBalance() external view returns(uint256) {\r\n        return balances[msg.sender];\r\n    }\r\n}"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}

@@ -32,12 +32,13 @@ contract GameKeyMarketplace {
     event ItemListed(uint256 indexed gameId, uint256 indexed price,string gameName, string gameImage, string[] tags, string[] genres,uint256 rating, address indexed seller);
     event ItemBought(uint256 indexed gameId, uint256 indexed price, address indexed buyer);
     event ItemCancelled(string indexed gameId);
+    event SellersPercentageChanged(uint256 newPercentage);
 
     mapping(string => Listings) private listings;
     mapping(address => BoughtGame[]) private gamesBought;
     mapping(address => uint256) private balances;
 
-    address private owner;
+    address private immutable owner;
     uint256 private sellersPercentage;
 
     constructor() {
@@ -45,6 +46,7 @@ contract GameKeyMarketplace {
         owner = msg.sender;
         sellersPercentage = 99;
     }
+
 
     function listGameKey(Game memory game, string memory listingId, string memory key, uint256 price) external {
           require(price > 0, "Price must be above zero");
@@ -98,13 +100,12 @@ contract GameKeyMarketplace {
     function withdraw() external {
         uint256 balance = balances[msg.sender];
         balances[msg.sender] = 0;
-        (bool success, ) = msg.sender.call{value: balance}("");
-        if(!success) {
+        if(!payable(msg.sender).send(balance)) {
             revert TransferFailed();
         }
     }
 
-    function ChangeSellersPercentage(uint256 newPercentage) external {
+    function changeSellersPercentage(uint256 newPercentage) external {
         if(msg.sender != owner) {
             revert("Only owner can change the percentage");
         }
@@ -112,6 +113,7 @@ contract GameKeyMarketplace {
             revert PercetageCantBeAbove100();
         }
         sellersPercentage = newPercentage;
+        emit SellersPercentageChanged(newPercentage);
     }
 
     function getGamesBought() external view returns(BoughtGame[] memory) {
