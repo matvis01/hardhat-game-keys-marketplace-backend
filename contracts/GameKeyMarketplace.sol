@@ -31,7 +31,7 @@ contract GameKeyMarketplace {
 
     event ItemListed(uint256 indexed gameId, uint256 indexed price,string gameName, string gameImage, string[] tags, string[] genres,uint256 rating, address indexed seller);
     event ItemBought(uint256 indexed gameId, uint256 indexed price, address indexed buyer);
-    event ItemCancelled(string indexed gameId);
+    event ItemCancelled(uint256 indexed gameId, uint256 indexed price, address indexed seller);
     event SellersPercentageChanged(uint256 newPercentage);
 
     mapping(string => Listings) private listings;
@@ -81,7 +81,7 @@ contract GameKeyMarketplace {
         emit ItemBought(gameId,price, msg.sender);
     }
 
-    function cancelListing(string memory listingId) external {
+    function cancelListing(string memory listingId, uint256 gameId, uint256 price ) external {
         Listings memory listing = listings[listingId];
         if(listing.owner != msg.sender) {
             revert OnlyOwnerCanCancelListing();
@@ -94,7 +94,8 @@ contract GameKeyMarketplace {
         }else{
             listings[listingId].keys.pop();
         }
-        emit ItemCancelled(listingId);
+      
+      emit ItemCancelled(gameId,price, msg.sender);
     }
 
     function withdraw() external {

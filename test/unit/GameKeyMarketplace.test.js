@@ -227,4 +227,32 @@ const { developmentChains } = require("../../helper-hardhat-config")
           assert.include(error.message, "NoListingFound")
         }
       })
+
+      it("can cancel listing", async function () {
+        // List a game key
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
+
+        const userConnectedToGameKeyMarketplace =
+          gameKeyMarketplace.connect(user)
+
+        // Cancel the listing
+        await gameKeyMarketplaceContract.cancelListing(LISTING_ID)
+
+        try {
+          await userConnectedToGameKeyMarketplace.buyGameKey(
+            LISTING_ID,
+            GAME[0],
+            deployer.address,
+            PRICE,
+            {
+              value: PRICE,
+            },
+          )
+
+          // If the transaction succeeds, fail the test
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.include(error.message, "NoListingFound")
+        }
+      })
     })
