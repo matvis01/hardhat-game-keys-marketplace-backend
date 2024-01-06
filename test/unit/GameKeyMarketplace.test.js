@@ -16,7 +16,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         accounts = await ethers.getSigners()
         deployer = accounts[0]
         user = accounts[1]
-        await deployments.fixture(["all"])
+        await deployments.fixture(["gamekeymarketplace"])
         gameKeyMarketplaceContract =
           await ethers.getContract("GameKeyMarketplace")
         gameKeyMarketplace = gameKeyMarketplaceContract.connect(deployer)
@@ -100,33 +100,6 @@ const { developmentChains } = require("../../helper-hardhat-config")
         const finalBalance = await ethers.provider.getBalance(deployer.address)
 
         assert.isTrue(finalBalance > initialBalance)
-      })
-
-      it("can remove a listed game", async function () {
-        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
-        await gameKeyMarketplace.cancelListing(LISTING_ID)
-
-        const userConnectedToGameKeyMarketplace =
-          gameKeyMarketplace.connect(user)
-
-        try {
-          // Try to buy a non-existent game key listing
-          await userConnectedToGameKeyMarketplace.buyGameKey(
-            LISTING_ID,
-            GAME[0],
-            deployer.address,
-            PRICE,
-            {
-              value: PRICE,
-            },
-          )
-
-          // If the transaction succeeds, fail the test
-          assert.fail("Transaction should have reverted")
-        } catch (error) {
-          // Check if the error message matches the expected custom error
-          assert.include(error.message, "NoListingFound")
-        }
       })
       it("returns the games bought by the caller", async function () {
         // Create an instance of the contract connected to the user
@@ -235,8 +208,11 @@ const { developmentChains } = require("../../helper-hardhat-config")
         const userConnectedToGameKeyMarketplace =
           gameKeyMarketplace.connect(user)
 
-        // Cancel the listing
-        await gameKeyMarketplaceContract.cancelListing(LISTING_ID)
+        await gameKeyMarketplaceContract.cancelListing(
+          LISTING_ID,
+          GAME[0],
+          PRICE,
+        )
 
         try {
           await userConnectedToGameKeyMarketplace.buyGameKey(
@@ -253,6 +229,135 @@ const { developmentChains } = require("../../helper-hardhat-config")
           assert.fail("Transaction should have reverted")
         } catch (error) {
           assert.include(error.message, "NoListingFound")
+        }
+      })
+
+      it("can change sellers percentage", async function () {
+        const newPercentage = 98
+        await gameKeyMarketplace.changeSellersPercentage(newPercentage)
+        const percentage = await gameKeyMarketplace.getSellersPercentage()
+        assert.equal(percentage, newPercentage)
+      })
+
+      it("only owner can change sellers percentage", async function () {
+        const newPercentage = 98
+        const userConnectedToGameKeyMarketplace =
+          gameKeyMarketplace.connect(user)
+        try {
+          await userConnectedToGameKeyMarketplace.changeSellersPercentage(
+            newPercentage,
+          )
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.isNotNull(error.message)
+        }
+      })
+
+      it("can't cancel not existing listing", async function () {
+        try {
+          await gameKeyMarketplaceContract.cancelListing(
+            LISTING_ID,
+            GAME[0],
+            PRICE,
+          )
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.include(error.message, "NoListingFound")
+        }
+      })
+
+      it("can't change sellers percentage to more than 100", async function () {
+        const newPercentage = 101
+        try {
+          await gameKeyMarketplace.changeSellersPercentage(newPercentage)
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.include(error.message, "PercetageCantBeAbove100")
+        }
+      })
+
+      it("can cancel a single listing when there is multiple of the same one", async function () {
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, "key2", PRICE)
+
+        await gameKeyMarketplaceContract.cancelListing(
+          LISTING_ID,
+          GAME[0],
+          PRICE,
+        )
+
+        const userConnectedToGameKeyMarketplace =
+          gameKeyMarketplace.connect(user)
+        await userConnectedToGameKeyMarketplace.buyGameKey(
+          LISTING_ID,
+          GAME[0],
+          deployer.address,
+          PRICE,
+          {
+            value: PRICE,
+          },
+        )
+        try {
+          await userConnectedToGameKeyMarketplace.buyGameKey(
+            LISTING_ID,
+            GAME[0],
+            deployer.address,
+            PRICE,
+            {
+              value: PRICE,
+            },
+          )
+        } catch (error) {
+          assert.include(error.message, "NoListingFound")
+        }
+      })
+
+      it("can't buy a listing by sending less funds than the price", async function () {
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
+        const userConnectedToGameKeyMarketplace =
+          gameKeyMarketplace.connect(user)
+        try {
+          await userConnectedToGameKeyMarketplace.buyGameKey(
+            LISTING_ID,
+            GAME[0],
+            deployer.address,
+            PRICE,
+            {
+              value: PRICE - BigInt(1),
+            },
+          )
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.isNotNull(error.message)
+        }
+      })
+
+      it("only owner can cancel his listing", async function () {
+        await gameKeyMarketplace.listGameKey(GAME, LISTING_ID, GAME_KEY, PRICE)
+        const userConnectedToGameKeyMarketplace =
+          gameKeyMarketplace.connect(user)
+        try {
+          await userConnectedToGameKeyMarketplace.cancelListing(
+            LISTING_ID,
+            GAME[0],
+            PRICE,
+          )
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.isNotNull(error.message)
+        }
+      })
+      it("listed game price must be greater than 0", async function () {
+        try {
+          await gameKeyMarketplace.listGameKey(
+            GAME,
+            LISTING_ID,
+            GAME_KEY,
+            ethers.parseEther("0"),
+          )
+          assert.fail("Transaction should have reverted")
+        } catch (error) {
+          assert.include(error.message, "Price must be above zero")
         }
       })
     })

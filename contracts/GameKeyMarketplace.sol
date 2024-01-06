@@ -83,11 +83,11 @@ contract GameKeyMarketplace {
 
     function cancelListing(string memory listingId, uint256 gameId, uint256 price ) external {
         Listings memory listing = listings[listingId];
-        if(listing.owner != msg.sender) {
-            revert OnlyOwnerCanCancelListing();
-        }
         if(listing.keys.length == 0) {
             revert NoListingFound();
+        }
+        else if(listing.owner != msg.sender) {
+            revert OnlyOwnerCanCancelListing();
         }
         else if(listing.keys.length == 1) {
             delete listings[listingId];
@@ -115,6 +115,10 @@ contract GameKeyMarketplace {
         }
         sellersPercentage = newPercentage;
         emit SellersPercentageChanged(newPercentage);
+    }
+
+    function getSellersPercentage() external view returns(uint256) {
+        return sellersPercentage;
     }
 
     function getGamesBought() external view returns(BoughtGame[] memory) {
